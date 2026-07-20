@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SpeedUndo — internet speed meter</title>
+  <meta name="description" content="Test your internet connection: download, upload, ping and jitter, measured live in your browser.">
+  <meta name="theme-color" content="#060A12">
+  <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
+  <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <script>
+    // Stamp the theme before first paint; dark is the house default.
+    (function () {
+      var t = 'dark';
+      try {
+        t = localStorage.getItem('speedundo.theme')
+          || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+      } catch (e) { /* private mode */ }
+      document.documentElement.dataset.theme = t;
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body data-state="idle">
+
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="SpeedUndo home">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="4" y="14" width="10" height="14" rx="2" class="mark-rx"/>
+        <rect x="18" y="4" width="10" height="24" rx="2" class="mark-tx"/>
+      </svg>
+      <span class="brand-name">SPEEDUNDO</span>
+      <span class="brand-sub">internet speed meter</span>
+    </a>
+    <nav class="topbar-actions" aria-label="App">
+      <button type="button" id="historyBtn" class="btn btn-ghost">History</button>
+      <button type="button" id="settingsBtn" class="btn btn-icon" aria-label="Settings">⚙</button>
+      <button type="button" id="themeBtn" class="btn btn-icon" aria-label="Switch theme">◐</button>
+    </nav>
+  </header>
+
+  <main class="app">
+
+    <!-- Gauge hero -->
+    <section class="hero" aria-label="Speed test">
+      <div class="gauge-wrap">
+        <canvas id="gauge" aria-hidden="true"></canvas>
+        <div class="gauge-center">
+          <button type="button" id="goBtn" class="go">GO</button>
+          <div id="gaugeReading" class="reading" hidden>
+            <span id="liveValue" class="reading-value">—</span>
+            <span id="liveUnit" class="reading-unit">Mbps</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="phase-row">
+        <span id="phaseChip" class="phase-chip" hidden>
+          <span id="phaseLed" class="led" data-kind="idle" aria-hidden="true"></span>
+          <span id="phaseText">READY</span>
+        </span>
+        <button type="button" id="stopBtn" class="btn btn-ghost" hidden>Stop</button>
+        <button type="button" id="againBtn" class="btn btn-primary" hidden>Test again</button>
+        <button type="button" id="shareBtn" class="btn btn-ghost" hidden>Share result</button>
+        <button type="button" id="copyBtn" class="btn btn-ghost" hidden>Copy result</button>
+      </div>
+
+      <div id="errorBanner" class="error-banner" role="alert" hidden>
+        <span class="error-icon" aria-hidden="true">!</span>
+        <span id="errorText"></span>
+        <button type="button" id="retryBtn" class="btn btn-ghost">Try again</button>
+      </div>
+
+      <p id="ispLine" class="isp-line" hidden>
+        <span class="isp-dot" aria-hidden="true"></span>
+        <span id="ispName">—</span>
+        <span id="ispWhere" class="isp-where"></span>
+      </p>
+    </section>
+
+    <div id="outage" class="outage" role="status" hidden></div>
+
+    <!-- Stat tiles -->
+    <section class="tiles" aria-label="Results">
+      <div class="tile tile-rx">
+        <p class="tile-eyebrow"><span class="led" data-kind="down" aria-hidden="true"></span>Download</p>
+        <p class="tile-value"><span id="downVal">—</span><span class="tile-unit js-speed-unit">Mbps</span></p>
+      </div>
+      <div class="tile tile-tx">
+        <p class="tile-eyebrow"><span class="led" data-kind="up" aria-hidden="true"></span>Upload</p>
+        <p class="tile-value"><span id="upVal">—</span><span class="tile-unit js-speed-unit">Mbps</span></p>
+      </div>
+      <div class="tile tile-lat">
+        <p class="tile-eyebrow"><span class="led" data-kind="ping" aria-hidden="true"></span>Ping</p>
+        <p class="tile-value"><span id="pingVal">—</span><span class="tile-unit">ms</span></p>
+      </div>
+      <div class="tile tile-lat">
+        <p class="tile-eyebrow"><span class="led" data-kind="ping" aria-hidden="true"></span>Packet loss</p>
+        <p class="tile-value"><span id="lossVal">—</span><span class="tile-unit">%</span></p>
+      </div>
+      <div class="tile tile-lat">
+        <p class="tile-eyebrow"><span class="led" data-kind="ping" aria-hidden="true"></span>Jitter</p>
+        <p class="tile-value"><span id="jitterVal">—</span><span class="tile-unit">ms</span></p>
+      </div>
+    </section>
+
+    <!-- Scope trace -->
+    <section class="scope" aria-label="Throughput over time">
+      <div class="scope-head">
+        <ul class="legend" aria-hidden="true">
+          <li><span class="swatch swatch-rx"></span>RX · Download</li>
+          <li><span class="swatch swatch-tx"></span>TX · Upload</li>
+        </ul>
+        <span class="scope-caption">Mbps over test time</span>
+      </div>
+      <div class="scope-body">
+        <canvas id="trace" aria-hidden="true"></canvas>
+        <div id="traceTooltip" class="trace-tooltip" hidden></div>
+      </div>
+      <details id="details" hidden>
+        <summary>Details</summary>
+        <table class="details-table">
+          <caption class="sr-only">Speed test details</caption>
+          <tbody id="detailsBody"></tbody>
+        </table>
+      </details>
+    </section>
+
+    <!-- Network intel (crowdsourced) -->
+    <section class="intel" id="intel" aria-label="Network intel" hidden>
+      <div class="intel-head">
+        <h2 class="intel-title">Network intel</h2>
+        <div class="intel-tabs" role="tablist" aria-label="Network intel views">
+          <button type="button" class="intel-tab" role="tab" id="tab-leaderboard" data-tab="leaderboard" aria-selected="true">City leaderboard</button>
+          <button type="button" class="intel-tab" role="tab" id="tab-patterns" data-tab="patterns" aria-selected="false">Time of day</button>
+          <button type="button" class="intel-tab" role="tab" id="tab-embed" data-tab="embed" aria-selected="false">Embed &amp; API</button>
+        </div>
+      </div>
+      <p id="intelScope" class="intel-scope"></p>
+
+      <div class="intel-view" data-panel="leaderboard" role="tabpanel" aria-labelledby="tab-leaderboard">
+        <div id="leaderboard" class="leaderboard"></div>
+      </div>
+
+      <div class="intel-view" data-panel="patterns" role="tabpanel" aria-labelledby="tab-patterns" hidden>
+        <p id="patternsScope" class="patterns-scope"></p>
+        <div class="patterns-body">
+          <canvas id="patterns" aria-hidden="true"></canvas>
+          <div id="patternsTip" class="trace-tooltip" hidden></div>
+        </div>
+        <p class="patterns-note">Median download by hour of day (server local time). Lower bars are congestion.</p>
+      </div>
+
+      <div class="intel-view" data-panel="embed" role="tabpanel" aria-labelledby="tab-embed" hidden>
+        <p class="embed-intro">Show your city's median on any page. The badge is a live SVG; the JSON API is open.</p>
+        <div class="embed-preview"><img id="badgeImg" alt="Live SpeedUndo speed badge" src=""></div>
+        <label class="embed-field">
+          <span>Markdown</span>
+          <input id="embedMd" type="text" readonly>
+        </label>
+        <label class="embed-field">
+          <span>HTML</span>
+          <input id="embedHtml" type="text" readonly>
+        </label>
+        <p class="embed-api">Public JSON: <a id="statsLink" href="#" target="_blank" rel="noopener">/api/stats</a></p>
+      </div>
+    </section>
+
+    <!-- Connection meta -->
+    <footer class="meta">
+      <ul id="metaChips" class="meta-chips" aria-label="Connection info"></ul>
+      <label class="server-pick">
+        <span>server</span>
+        <select id="serverSelect"></select>
+      </label>
+    </footer>
+
+  </main>
+
+  <!-- History drawer -->
+  <div id="backdrop" class="backdrop" hidden></div>
+
+  <!-- Share dialog -->
+  <div id="shareBackdrop" class="backdrop" hidden></div>
+  <div id="shareModal" class="share-modal" role="dialog" aria-modal="true" aria-label="Share your result" hidden>
+    <header class="share-head">
+      <h2>Share your result</h2>
+      <button type="button" id="shareClose" class="btn btn-icon" aria-label="Close share dialog">✕</button>
+    </header>
+    <div class="share-card-box">
+      <canvas id="shareCard" width="1200" height="630" aria-label="Result card image"></canvas>
+    </div>
+    <label class="share-caption">
+      <span>Caption</span>
+      <textarea id="shareCaption" rows="3" spellcheck="false"></textarea>
+    </label>
+    <div class="share-nets" id="shareNets" role="group" aria-label="Post to"></div>
+    <div class="share-tools">
+      <button type="button" id="shareDownload" class="btn btn-ghost">Download image</button>
+      <button type="button" id="shareCopyImg" class="btn btn-ghost">Copy image</button>
+      <button type="button" id="shareNative" class="btn btn-ghost" hidden>More…</button>
+    </div>
+    <p class="share-note" id="shareNote">Share links can't carry an image — it's copied to your clipboard
+      when you pick a network. Paste it into the post beside the caption.</p>
+  </div>
+
+  <!-- Settings dialog -->
+  <div id="settingsBackdrop" class="backdrop" hidden></div>
+  <div id="settingsModal" class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" hidden>
+    <header class="settings-head">
+      <h2 id="settingsTitle">Settings</h2>
+      <button type="button" id="settingsClose" class="btn btn-icon" aria-label="Close settings">✕</button>
+    </header>
+    <p class="settings-group">Global settings</p>
+    <div class="settings-body">
+      <div class="setting-row">
+        <span class="setting-label" id="lbl-time">Time</span>
+        <div class="seg" role="group" aria-labelledby="lbl-time" data-setting="time">
+          <button type="button" class="seg-opt" data-value="12h">12-hour</button>
+          <button type="button" class="seg-opt" data-value="24h">24-hour</button>
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <label class="setting-label" for="dateFormat">Date</label>
+        <select id="dateFormat" class="setting-select" data-setting="date">
+          <option value="MDY">MM/DD/YYYY</option>
+          <option value="DMY">DD/MM/YYYY</option>
+          <option value="YMD">YYYY-MM-DD</option>
+        </select>
+      </div>
+
+      <div class="setting-row">
+        <span class="setting-label" id="lbl-distance">Distance</span>
+        <div class="seg" role="group" aria-labelledby="lbl-distance" data-setting="distance">
+          <button type="button" class="seg-opt" data-value="mi">Miles</button>
+          <button type="button" class="seg-opt" data-value="km">Kilometers</button>
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <span class="setting-label" id="lbl-speed">Speed</span>
+        <div class="seg" role="group" aria-labelledby="lbl-speed" data-setting="speed">
+          <button type="button" class="seg-opt" data-value="mbps">Mbps</button>
+          <button type="button" class="seg-opt" data-value="kbps">Kbps</button>
+        </div>
+      </div>
+
+      <div class="setting-row setting-row-top">
+        <span class="setting-label">Server</span>
+        <div class="setting-server">
+          <span id="settingsServerName" class="setting-server-name">—</span>
+          <select id="settingsServerSelect" class="setting-select" aria-label="Test server" hidden></select>
+          <button type="button" id="settingsChangeServer" class="setting-link">Change Server</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <aside id="drawer" class="drawer" role="dialog" aria-modal="true" aria-label="Test history" hidden>
+    <header class="drawer-head">
+      <h2>History</h2>
+      <div class="drawer-actions">
+        <button type="button" id="clearBtn" class="btn btn-ghost">Clear all</button>
+        <button type="button" id="drawerClose" class="btn btn-icon" aria-label="Close history">✕</button>
+      </div>
+    </header>
+    <div id="historyList" class="history-list"></div>
+  </aside>
+
+  <p id="srStatus" class="sr-only" role="status" aria-live="polite"></p>
+
+  <noscript>
+    <p class="noscript">SpeedUndo needs JavaScript to measure your connection — the test runs entirely in your browser.</p>
+  </noscript>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
