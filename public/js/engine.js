@@ -42,7 +42,13 @@ const DOWN_WINDOW_MS = 15000;   // ≥15 s steady sampling for a stable figure
 const DOWN_REQUEST_BYTES = 25_000_000;
 const UP_STREAMS = 4;
 const UP_WINDOW_MS = 15000;
-const UP_BLOB_BYTES = 8 * 1024 * 1024;
+// 1 MiB per request (was 8 MiB). Upload bytes are credited only when a request
+// completes within the window; a single 8 MiB blob across 4 parallel streams
+// needs a ~17 Mbps uplink just to finish ONE request in 15 s, so slower (or
+// asymmetric) links credited zero and the phase failed with "No data moved".
+// 1 MiB completes many times over even on ~2 Mbps up, giving reliable, more
+// accurate crediting. (Loopback/local dev hid this — it has ~infinite uplink.)
+const UP_BLOB_BYTES = 1 * 1024 * 1024;
 const SAMPLE_MS = 100;
 const RAMP_SEC = 1.5;
 const LOADED_PING_GAP_MS = 750;
