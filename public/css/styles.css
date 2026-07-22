@@ -728,6 +728,14 @@ body {
   letter-spacing: 0.03em;
 }
 
+.history-net {
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.03em;
+}
+
 /* ---- isp line ----------------------------------------------------------------- */
 
 .isp-line {

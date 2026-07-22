@@ -1,0 +1,39 @@
+{
+  "name": "speedundo",
+  "main": "src/worker.js",
+  // Recent date so the isolate gets current runtime semantics (streams, etc.).
+  // Bump periodically. No nodejs_compat flag: the Worker uses only Web APIs
+  // (Response, ReadableStream, URL, D1 binding) — no Node built-ins.
+  "compatibility_date": "2026-07-15",
+
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+
+  // Static assets (index.html, css/, js/, icons/, ...) live in ./public and are
+  // served by the platform. The ASSETS binding lets the Worker fall through to
+  // them for any non-API path.
+  //
+  // run_worker_first pins ONLY the dynamic routes to the Worker; every other
+  // path (/, /js/*, /css/*, favicon, ...) is served straight from assets
+  // without invoking the Worker at all — cheaper and faster, and it guarantees
+  // /down, /up and /api/* reach the Worker even if an asset name ever collided.
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/down", "/up", "/api/*"]
+  },
+
+  // Community results store. database_id is filled in after `wrangler d1 create
+  // speedundo` (see deploy notes). migrations_dir points at ./migrations so
+  // `wrangler d1 migrations apply speedundo` runs 0001 (schema) then 0002 (seed).
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "speedundo",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "migrations_dir": "./migrations"
+    }
+  ]
+}

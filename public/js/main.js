@@ -140,6 +140,8 @@ function fillDetails(r) {
         ? `TCP retransmits, ${r.lossSent} segments under load`
         : `UDP, ${r.lossReceived}/${r.lossSent} via TURN relay`})`
       : (r.server === 'local' ? 'not measured for LAN tests' : 'unavailable (no relay reachable)')],
+    ['ISP', r.geo?.isp || '—'],
+    ['Location', [r.geo?.city, r.geo?.region, r.geo?.postal].filter(Boolean).join(' · ') || '—'],
   ];
   els.detailsBody.textContent = '';
   for (const [k, v] of rows) {
@@ -174,7 +176,7 @@ function start() {
   setState('running');
   setPhaseChip(PHASE_LABEL.meta, 'idle');
   setReading('···', '');
-  gauge.setKind('ping');
+  gauge.setKind('idle');
   gauge.start();
   announce('Test started. Connecting to the test server.');
 
@@ -183,9 +185,11 @@ function start() {
       const kind = PHASE_KIND[name] || 'idle';
       if (name !== 'done') setPhaseChip(PHASE_LABEL[name], kind);
       if (name === 'ping') {
-        gauge.setKind('ping');
-        setReading('···', 'ms');
-        announce('Measuring latency.');
+        // Latency runs behind the meter — the gauge stays neutral, the value
+        // lands in the Ping tile below.
+        gauge.setKind('idle');
+        setReading('···', '');
+        announce('Measuring latency in the background.');
       } else if (name === 'download') {
         gauge.setKind('down');
         gauge.setValue(0);
@@ -198,9 +202,10 @@ function start() {
         setReading('0', speedUnitLabel());
         announce('Measuring upload speed.');
       } else if (name === 'loss') {
-        gauge.setKind('ping');
-        setReading('···', '% loss');
-        announce('Measuring packet loss over a relay.');
+        // Packet loss also runs behind the meter — result goes to its tile.
+        gauge.setKind('idle');
+        setReading('···', '');
+        announce('Measuring packet loss over a relay in the background.');
       }
     },
     isp(g) {
@@ -213,7 +218,8 @@ function start() {
       renderMetaChips(m, null);
     },
     ping(ms, i, n) {
-      setReading(fmtMs(ms), 'ms');
+      // Background test: fill the Ping tile only; the meter is reserved for
+      // Download/Upload.
       els.pingVal.textContent = fmtMs(ms);
     },
     sample(kind, t, v) {
@@ -310,13 +316,18 @@ function renderIntelFromCache() {
   } = lastIntel;
   renderOutage(els.outage, out, g);
   renderLeaderboard(els.leaderboard, lb, g.isp);
+  // demo:true means the scope has no real community reports yet and the numbers
+  // are sample/seed data — label it plainly so it's never mistaken for real
+  // crowdsourced data. The server never blends demo and real (see worker.js).
   els.intelScope.textContent = lb
-    ? `${g.city} · last ${lb.scope.windowDays} days · ${lb.scope.samples} community reports`
+    ? (lb.demo
+      ? `${g.city} · sample data — no community reports yet · last ${lb.scope.windowDays} days`
+      : `${g.city} · last ${lb.scope.windowDays} days · ${lb.scope.samples} community reports`)
     : '';
   if (pat) {
     patternsChart.setData(pat.hours);
     els.patternsScope.textContent = pat.scope.samples
-      ? `${patScope} · ${g.city} · ${pat.scope.samples} reports`
+      ? `${patScope} · ${g.city} · ${pat.scope.samples} reports${pat.demo ? ' · sample data' : ''}`
       : `${g.city} · no reports yet`;
   }
 }

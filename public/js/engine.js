@@ -26,7 +26,7 @@ export const SERVERS = [
   },
   {
     id: 'local',
-    label: 'This machine (LAN)',
+    label: 'This server',
     down: (bytes) => `/down?bytes=${bytes}`,
     up: '/up',
     hasMeta: false,
