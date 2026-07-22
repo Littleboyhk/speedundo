@@ -100,19 +100,20 @@ function handleDown(request, url) {
   return new Response(body, { status: 200, headers });
 }
 
-// POST /up — drain the request body, counting the bytes we actually receive and
-// the wall-clock span from first byte to last, then reply {received, ms, mbps}.
+// POST /up — drain the request body and reply with the authoritative count of
+// bytes actually received. `received` is the ONLY trusted field: the client
+// credits it (not bytes merely buffered into its local socket), so upload
+// throughput can't run ahead of the receiver. The body is streamed through a
+// reader and each chunk discarded immediately — O(1) memory regardless of size.
 //
-// This preserves the authoritative server-side accounting fix from server.js:
-// the client credits THESE confirmed bytes (returned on the response), not
-// bytes merely buffered into its local socket — so upload throughput can never
-// run ahead of the receiver. The body is streamed through a reader and each
-// chunk is discarded immediately: the whole payload is NEVER buffered in
-// memory, so an 8 MB (or larger) upload costs O(1) memory here.
+// NO server-side timing/mbps is returned. On the Cloudflare edge the request
+// body is buffered before the Worker runs, so a first-byte→last-byte span here
+// measures edge→Worker delivery (observed ~176 ms for an 8 MB upload that took
+// the client 3.76 s), NOT the real upload rate. That figure was meaningless and
+// is intentionally dropped; the client measures upload throughput itself from
+// these confirmed byte counts over its own wall clock.
 async function handleUp(request) {
   let received = 0;
-  let firstAt = 0;
-  let lastAt = 0;
 
   if (request.body) {
     const reader = request.body.getReader();
@@ -120,9 +121,6 @@ async function handleUp(request) {
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
-        const now = Date.now();
-        if (!firstAt) firstAt = now;
-        lastAt = now;
         received += value.byteLength;
         // value is dropped here — no accumulation, constant memory.
       }
@@ -131,11 +129,9 @@ async function handleUp(request) {
     }
   }
 
-  const ms = firstAt ? Math.max(0, lastAt - firstAt) : 0;
-  // Mbps = bytes*8 / (ms/1000) / 1e6. Null when the span is too short to be
-  // meaningful (a single-chunk POST), exactly as server.js did.
-  const mbps = ms > 0 ? Math.round(((received * 8) / (ms * 1000)) * 100) / 100 : null;
-  return json({ received, ms, mbps });
+  // edgeBuffered flags that any server-side timing would be unreliable here, so
+  // consumers know `received` is the only meaningful field.
+  return json({ received, edgeBuffered: true });
 }
 
 /* ---- data store ----------------------------------------------------------- */
