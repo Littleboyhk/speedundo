@@ -1,0 +1,19 @@
+{
+  "name": "speedundo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SpeedUndo — internet speed meter + community API, on Cloudflare Workers + D1.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "gen-seed": "node scripts/gen-seed.js",
+    "db:create": "wrangler d1 create speedundo",
+    "db:migrate:local": "wrangler d1 migrations apply speedundo --local",
+    "db:migrate": "wrangler d1 migrations apply speedundo --remote",
+    "types": "wrangler types"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

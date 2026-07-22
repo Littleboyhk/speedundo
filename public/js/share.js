@@ -41,7 +41,7 @@ export function defaultCaption(result) {
     `${fmtMs(result.ping)} ms ping`,
   ];
   if (result.loss != null) bits.push(`${fmtPct(result.loss)}% loss`);
-  const where = [geo.isp, geo.city].filter(Boolean).join(', ');
+  const where = [geo.isp, geo.city, geo.postal].filter(Boolean).join(', ');
   return `My internet right now: ${bits.join(' · ')}`
     + (where ? ` — on ${where}` : '')
     + `\nMeasured with SpeedUndo #speedtest`;

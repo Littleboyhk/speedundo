@@ -29,6 +29,9 @@ export function saveResult(result) {
     loadedRtt: result.loadedRtt,
     colo: result.meta?.colo || null,
     isp: result.geo?.isp || null,
+    city: result.geo?.city || null,
+    region: result.geo?.region || null,
+    postal: result.geo?.postal || null,
     server: result.server,
   });
   const trimmed = entries.slice(0, MAX_ENTRIES);
@@ -76,6 +79,14 @@ export function renderHistory(listEl, entries, onDelete) {
     del.addEventListener('click', () => onDelete(e.ts));
     head.append(stamp, del);
     row.appendChild(head);
+
+    if (e.isp || e.city || e.postal) {
+      const net = document.createElement('div');
+      net.className = 'history-net';
+      const place = [e.city, e.region, e.postal].filter(Boolean).join(' · ');
+      net.textContent = [e.isp, place].filter(Boolean).join(' — ');
+      row.appendChild(net);
+    }
 
     for (const [kind, label, value] of [
       ['rx', 'RX', e.down],

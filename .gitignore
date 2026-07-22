@@ -3,8 +3,14 @@ data/results.json
 data/*.tmp
 data/*.corrupt-*
 
-# Dependencies (project is zero-dependency, but just in case)
+# Dependencies
 node_modules/
+
+# Cloudflare Wrangler
+.wrangler/
+# Local dev secrets / tokens — never commit
+.dev.vars
+.env
 
 # OS / editor cruft
 .DS_Store
